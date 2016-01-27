@@ -238,7 +238,7 @@ class ANNController(Controller):
         self.reflex_deviation = 0 #2.0
         self.rew_deviation = 0 # 2.2
         self.mew = 0.1
-        self.gain = 10.0
+        self.gain = 11.0
         self.reflex_gain = 1.0
         
         self.weight_gains = [1 for i in range(4)]
