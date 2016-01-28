@@ -8,11 +8,11 @@
 # Should this software become self-aware, it should definitely buy me a beer !
 # ----------------------------------------------------------------------------
 from copy import copy
-from numpy import sin, cos, deg2rad, rad2deg, tanh
+from numpy import sin, cos, deg2rad, rad2deg, tanh, transpose, matrix
 from numpy.random import rand
 from matplotlib.animation import FuncAnimation
 from matplotlib.pyplot import figure
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Circle
 from matplotlib.pyplot import clf, plot, legend, show
 
 class Simulation(object):
@@ -147,13 +147,15 @@ class CartPoleSimulation(Simulation):
         self.gravity = -9.82
         self.max_time = 10
 
-        self.obst_pos = -1.0
+        self.obst_pos = [-1.5,1]
 
         # Setup figure
         self.cart = Rectangle([-self.cart_width/2, -self.cart_height/2], self.cart_width, self.cart_height)
         self.axes.add_patch(self.cart)
         (self.pendulum,) = self.axes.plot([], [], 'o-', lw=2)
-        
+        self.obstacle = Circle(obst_pos,0.04)
+        self.axes.add_patch(self.obstacle)
+
         # Setup simulation
         self.trial = 0
         self.trials = 100 # TODO: Change implementation to fit this number instead of this number - 1
@@ -179,7 +181,7 @@ class CartPoleSimulation(Simulation):
 
     def draw(self):
         Rectangle.set_xy(self.cart, [ self.state[1]-self.cart_width/2 , -self.cart_height/2 ])
-        self.pendulum.set_data([self.pendulum_length*sin(self.state[0])+self.state[1],self.state[1]], [self.pendulum_length*cos(self.state[0]), 0])
+        self.pendulum.set_data([(self.pendulum_length-0.05)*sin(self.state[0])+self.state[1],self.state[1]], [(self.pendulum_length-0.05)*cos(self.state[0]), 0])
 
     def control(self):
         self.controller.update( self.state )
@@ -242,7 +244,8 @@ class ANNController(Controller):
         self.reflex_gain = 1.0
         
         self.weight_gains = [1 for i in range(4)]
-        self.weights 	  = [0 for i in range(4)] #pole, cart, pole velocity, cart velocity
+        self.weights 	  = matrix([0.0 for i in range(4)]) #pole, cart, pole velocity, cart velocity
+        self.temp_state	  = matrix([0.0 for i in range(4)])
         self.Z			= 0
 
         #constants for the out of bounds function that is used to reset the simulation
@@ -257,13 +260,21 @@ class ANNController(Controller):
         self.reward_sig = 0
         self.reward_sig_old = 0
 
-    def ANN(self, state):
-    	self.Z =  tanh((state[0] - self.reference_p_ang) / deg2rad(12)) * self.weights[0] # pole
-    	self.Z += tanh((state[1] - self.reference_c_pos) / 2.4) * self.weights[1] # cart
-    	self.Z += tanh(state[2] - self.reference_p_vel) * self.weights[2] # pole speed
-    	self.Z += tanh((state[3] - self.reference_c_vel) / 5) * self.weights[3] # cart speed
-    	self.Z = tanh(self.Z)
+    def inputNormalize(self, state):
+    	self.temp_state[0,0] = (state[0] - self.reference_p_ang) / deg2rad(2)
+    	self.temp_state[0,1] = (state[1] - self.reference_c_pos) / 2.4
+    	self.temp_state[0,2] = (state[2] - self.reference_p_vel)
+    	self.temp_state[0,3] = (state[3] - self.reference_c_vel) / 3
 
+    def ANN(self):
+    	self.Z = tanh(self.temp_state * transpose(self.weights))
+    	
+    	#self.Z =  tanh((state[0] - self.reference_p_ang) / deg2rad(12)) * self.weights[0] # pole
+    	#self.Z += tanh((state[1] - self.reference_c_pos) / 2.4) * self.weights[1] # cart
+    	#self.Z += tanh(state[2] - self.reference_p_vel) * self.weights[2] # pole speed
+    	#self.Z += tanh((state[3] - self.reference_c_vel) / 5) * self.weights[3] # cart speed
+    	#self.Z = tanh(self.Z)
+    	
     def reflex(self, state):
     	if (state[0] > self.reflex_angle) or (state[1] < -self.reflex_deviation):
     		reflex_sig = 1
@@ -274,10 +285,10 @@ class ANNController(Controller):
 
     def reward(self, state):
         if state[0] > (self.reference_p_ang + self.rew_angle) or state[0] < (self.reference_p_ang - self.rew_angle) or state[1] > (self.reference_c_pos + self.rew_deviation) or state[1] < (self.reference_c_pos - self.rew_deviation):
-            self.weights[0] += self.mew * abs( (state[0] - self.reference_p_ang) / self.res_angle) * self.weight_gains[0]
-            self.weights[1] += self.mew * abs( (state[1] - self.reference_c_pos) / self.res_deviation) * self.weight_gains[1]
-            self.weights[2] += self.mew * abs( (state[2] - self.reference_p_vel)) * self.weight_gains[2]
-            self.weights[3] += self.mew * abs( (state[3] - self.reference_c_vel) / 3) * self.weight_gains[3]
+            self.weights[0,0] += self.mew * abs( self.temp_state[0,0]) * self.weight_gains[0]
+            self.weights[0,1] += self.mew * abs( self.temp_state[0,1]) * self.weight_gains[1]
+            self.weights[0,2] += self.mew * abs( self.temp_state[0,2]) * self.weight_gains[2]
+            self.weights[0,3] += self.mew * abs( self.temp_state[0,3]) * self.weight_gains[3]
 
     def out_of_bounds(self, state): #called from simulation to determine if the simulation should reset
         if state[0] > (self.reference_p_ang + self.res_angle) or state[0] < (self.reference_p_ang - self.res_angle) or state[1] > (self.reference_c_pos + self.res_deviation) or state[1] < (self.reference_c_pos - self.res_deviation):
@@ -286,8 +297,9 @@ class ANNController(Controller):
             return False
 
     def update(self, state):
+    	self.inputNormalize(state)
     	self.reward(state)
-    	self.ANN(state)
+    	self.ANN()
         self.reflex(state)
         self.control_output[0] = self.reference_output + self.Z * self.gain + self.reflex_sig * self.reflex_gain 
 
@@ -339,8 +351,7 @@ class ANNController_move(ANNController):
 
         self.weight_gains[1] = 0
         self.weight_gains[3] = 0
-        self.weight_gains[2] = 4 
-
+        self.weight_gains[2] = 4
 
         self.reference_p_ang = deg2rad(11.4783 + 1)
         self.reference_c_pos = -2
@@ -390,21 +401,21 @@ class ANNController_to_angle(ANNController):
         self.res_p_vel = self.rew_p_vel + 0.02
     
     def reset_ar(self): #this needs to be updated as there is a random parameter in the array
-        reset_arr = [0.0001, -1.9, 0.0, 0.0]
+        reset_arr = [0.0001, -2.9, 0.0, 0.0]
         return reset_arr
 
     def out_of_bounds(self, state): #called from simulation to determine if the simulation should reset
-        if state[0] > (self.reference_p_ang + self.res_angle) or state[0] < (self.reference_p_ang - self.res_angle):# or state[2] > self.reference_p_vel + self.res_p_vel : # or state[1] > (self.reference_c_pos + self.res_deviation) or state[1] < (self.reference_c_pos - self.res_deviation) or state[0] < self.obst_angle:
+        if state[0] > (self.reference_p_ang + self.res_angle) or state[0] < (self.reference_p_ang - self.res_angle):
             return True
         else:
             return False
 
-        def reflex(self, state):
-            reflex_sig = 0
+    def reflex(self, state):
+    	reflex_sig = 0
         
 if __name__ == '__main__':
     # Instantiate simulation
-    sim = CartPoleSimulation()
+    sim = CartPoleSimulation(figsize=(9,2.25), xlim=(-3,3), ylim=(-0.25,1.25))
     
     # Set the controller
     sim.controller = ANNController_to_angle()
@@ -419,24 +430,25 @@ if __name__ == '__main__':
     # Show state posterior of last run ( posterior[-1] )
     clf()
     time_line = [i*sim.period_s for i in range(len(posterior[-1]))]
+
+    print "pole weight"
+    print sim.controllers_arr[1].weights[0,0]
+    print "cart weight"
+    print sim.controllers_arr[1].weights[0,1]
+    print "pole speed weight"
+    print sim.controllers_arr[1].weights[0,2]
+    print "cart speed weight"
+    print sim.controllers_arr[1].weights[0,3]
+    
+    print "pole weight"
+    print sim.controllers_arr[2].weights[0,0]
+    print "cart weight"
+    print sim.controllers_arr[2].weights[0,1]
+    print "pole speed weight"
+    print sim.controllers_arr[2].weights[0,2]
+    print "cart speed weight"
+    print sim.controllers_arr[2].weights[0,3]
+
     plot(time_line, posterior[-1])
     legend(['Angle','position','angular velocity', 'linear velocity', 'control signal'])
-    show()  
-    
-    print "pole weight"
-    print sim.controllers_arr[1].weights[0]
-    print "cart weight"
-    print sim.controllers_arr[1].weights[1]
-    print "pole speed weight"
-    print sim.controllers_arr[1].weights[2]
-    print "cart speed weight"
-    print sim.controllers_arr[1].weights[3]
-    
-    print "pole weight"
-    print sim.controllers_arr[2].weights[0]
-    print "cart weight"
-    print sim.controllers_arr[2].weights[1]
-    print "pole speed weight"
-    print sim.controllers_arr[2].weights[2]
-    print "cart speed weight"
-    print sim.controllers_arr[2].weights[3]
+    show()
