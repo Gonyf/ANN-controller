@@ -8,7 +8,7 @@
 # Should this software become self-aware, it should definitely buy me a beer !
 # ----------------------------------------------------------------------------
 from copy import copy
-from numpy import sin, cos, deg2rad, rad2deg, tanh, transpose, matrix
+from numpy import sin, cos, deg2rad, rad2deg, tanh, transpose, matrix, r_
 from numpy.random import rand
 from matplotlib.animation import FuncAnimation
 from matplotlib.pyplot import figure
@@ -153,7 +153,7 @@ class CartPoleSimulation(Simulation):
         self.cart = Rectangle([-self.cart_width/2, -self.cart_height/2], self.cart_width, self.cart_height)
         self.axes.add_patch(self.cart)
         (self.pendulum,) = self.axes.plot([], [], 'o-', lw=2)
-        self.obstacle = Circle(obst_pos,0.04)
+        self.obstacle = Circle(self.obst_pos,0.04)
         self.axes.add_patch(self.obstacle)
 
         # Setup simulation
@@ -194,7 +194,7 @@ class CartPoleSimulation(Simulation):
             self.reset(self.controller.reset_ar())
 
         # if the cart is past the obstacle
-        if self.controller == self.controllers_arr[1] and self.state[1] > self.obst_pos:
+        if self.controller == self.controllers_arr[1] and self.state[1] > self.obst_pos[1]:
             self.controller = self.controllers_arr[2]
 
         # if the pole is under the obstacle
@@ -243,8 +243,9 @@ class ANNController(Controller):
         self.gain = 11.0
         self.reflex_gain = 1.0
         
-        self.weight_gains = [1 for i in range(4)]
+        self.weight_gains = matrix([1.0 for i in range(4)])
         self.weights 	  = matrix([0.0 for i in range(4)]) #pole, cart, pole velocity, cart velocity
+        self.weights 	  = r_[self.weights,self.weights]
         self.temp_state	  = matrix([0.0 for i in range(4)])
         self.Z			= 0
 
@@ -268,6 +269,8 @@ class ANNController(Controller):
 
     def ANN(self):
     	self.Z = tanh(self.temp_state * transpose(self.weights))
+    	self.Z = float(self.Z[0])
+    	print self.Z
     	
     	#self.Z =  tanh((state[0] - self.reference_p_ang) / deg2rad(12)) * self.weights[0] # pole
     	#self.Z += tanh((state[1] - self.reference_c_pos) / 2.4) * self.weights[1] # cart
@@ -285,10 +288,11 @@ class ANNController(Controller):
 
     def reward(self, state):
         if state[0] > (self.reference_p_ang + self.rew_angle) or state[0] < (self.reference_p_ang - self.rew_angle) or state[1] > (self.reference_c_pos + self.rew_deviation) or state[1] < (self.reference_c_pos - self.rew_deviation):
-            self.weights[0,0] += self.mew * abs( self.temp_state[0,0]) * self.weight_gains[0]
-            self.weights[0,1] += self.mew * abs( self.temp_state[0,1]) * self.weight_gains[1]
-            self.weights[0,2] += self.mew * abs( self.temp_state[0,2]) * self.weight_gains[2]
-            self.weights[0,3] += self.mew * abs( self.temp_state[0,3]) * self.weight_gains[3]
+            #self.weights += self.mew * abs( self.temp_state) * transpose(self.weight_gains)
+            self.weights[0,0] += self.mew * abs( self.temp_state[0,0]) * self.weight_gains[0,0]
+            self.weights[0,1] += self.mew * abs( self.temp_state[0,1]) * self.weight_gains[0,1]
+            self.weights[0,2] += self.mew * abs( self.temp_state[0,2]) * self.weight_gains[0,2]
+            self.weights[0,3] += self.mew * abs( self.temp_state[0,3]) * self.weight_gains[0,3]
 
     def out_of_bounds(self, state): #called from simulation to determine if the simulation should reset
         if state[0] > (self.reference_p_ang + self.res_angle) or state[0] < (self.reference_p_ang - self.res_angle) or state[1] > (self.reference_c_pos + self.res_deviation) or state[1] < (self.reference_c_pos - self.res_deviation):
@@ -349,9 +353,9 @@ class ANNController_move(ANNController):
         self.gain = 50.0
         self.reflex_gain = 0.0
 
-        self.weight_gains[1] = 0
-        self.weight_gains[3] = 0
-        self.weight_gains[2] = 4
+        self.weight_gains[0,1] = 0.0
+        self.weight_gains[0,3] = 0.0
+        self.weight_gains[0,2] = 4.0
 
         self.reference_p_ang = deg2rad(11.4783 + 1)
         self.reference_c_pos = -2
@@ -378,9 +382,9 @@ class ANNController_to_angle(ANNController):
     def __init__(self):
         super( ANNController_to_angle, self ).__init__()
 
-        self.weight_gains[1] = 0
-        self.weight_gains[3] = 0
-        self.weight_gains[2] = 4 
+        self.weight_gains[0,1] = 0.0
+        self.weight_gains[0,3] = 0.0
+        self.weight_gains[0,2] = 4.0
 
         # Initialization for ANN
         self.rew_angle = deg2rad(12)
