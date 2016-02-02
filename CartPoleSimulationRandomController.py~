@@ -269,7 +269,14 @@ class ANNController(Controller):
 
     def ANN(self):
     	self.Z = self.weights * transpose(self.temp_state)
-    	self.Z = tanh(self.Z)
+    	self.Z = tanh(float(self.Z[0]))
+    	print self.Z
+    	
+    	#self.Z =  tanh((state[0] - self.reference_p_ang) / deg2rad(12)) * self.weights[0] # pole
+    	#self.Z += tanh((state[1] - self.reference_c_pos) / 2.4) * self.weights[1] # cart
+    	#self.Z += tanh(state[2] - self.reference_p_vel) * self.weights[2] # pole speed
+    	#self.Z += tanh((state[3] - self.reference_c_vel) / 5) * self.weights[3] # cart speed
+    	#self.Z = tanh(self.Z)
     	
     def reflex(self, state):
     	if (state[0] > self.reflex_angle) or (state[1] < -self.reflex_deviation):
@@ -298,7 +305,7 @@ class ANNController(Controller):
     	self.reward(state)
     	self.ANN()
         self.reflex(state)
-        self.control_output[0] = self.reference_output + self.Z[0] * self.gain + self.reflex_sig * self.reflex_gain 
+        self.control_output[0] = self.reference_output + self.Z * self.gain + self.reflex_sig * self.reflex_gain 
 
 class ANNController_balance(ANNController):
     def __init__(self):
