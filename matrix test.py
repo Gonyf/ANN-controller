@@ -11,4 +11,5 @@ print we
 z = we * np.transpose(wg)
 print z
 print np.tanh(z)
-
+print np.sign(-10)
+print np.sign(12)
