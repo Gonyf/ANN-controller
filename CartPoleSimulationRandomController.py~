@@ -320,10 +320,10 @@ class ANNController(Controller):
 				self.weights2[i,3] += self.mew * ( self.Z1[3]) * self.Z2[3] * self.weight_gains[0,3]
 			
 
-			self.weights3[0,0] += self.mew * ( self.Z2[0]) * self.Z3 * self.weight_gains[0,0]
-			self.weights3[0,1] += self.mew * ( self.Z2[1]) * self.Z3 * self.weight_gains[0,1]
-			self.weights3[0,2] += self.mew * ( self.Z2[2]) * self.Z3 * self.weight_gains[0,2]
-			self.weights3[0,3] += self.mew * ( self.Z2[3]) * self.Z3 * self.weight_gains[0,3]	        
+			self.weights3[0,0] += self.mew * ( self.Z2[0]) * self.Z3[0] * self.weight_gains[0,0]
+			self.weights3[0,1] += self.mew * ( self.Z2[1]) * self.Z3[1] * self.weight_gains[0,1]
+			self.weights3[0,2] += self.mew * ( self.Z2[2]) * self.Z3[2] * self.weight_gains[0,2]
+			self.weights3[0,3] += self.mew * ( self.Z2[3]) * self.Z3[3] * self.weight_gains[0,3]	        
 
 	def out_of_bounds(self, state): #called from simulation to determine if the simulation should reset
 		if state[0] > (self.reference_p_ang + self.res_angle) or state[0] < (self.reference_p_ang - self.res_angle) or state[1] > (self.reference_c_pos + self.res_deviation) or state[1] < (self.reference_c_pos - self.res_deviation):
