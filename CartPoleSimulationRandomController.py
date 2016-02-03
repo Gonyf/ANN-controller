@@ -233,22 +233,22 @@ class ANNController(Controller):
 		super( ANNController, self ).__init__()
 
 		self.reset_arr = []
-	  # Initialization for ANN
+	  
+	  	# Initialization for ANN
 		self.reflex_angle = 0 #deg2rad(10)
 		self.rew_angle = 0 #deg2rad(12)
 		self.reflex_deviation = 0 #2.0
 		self.rew_deviation = 0 # 2.2
-		self.mew = 0.005
+		self.mew = 0.1 
 		self.gain = 11.0
 		self.reflex_gain = 1.0
 		
 		self.weight_gains = matrix([1.0 for i in range(4)])
 
-		self.weights1 	  = matrix([0.0 for i in range(4)]) #pole, cart, pole velocity, cart velocity
-		self.weights1 	  = r_[self.weights1,self.weights1]
-		self.weights1 	  = r_[self.weights1,self.weights1]
-		self.weights2	  = self.weights1
-		self.weights3	  = matrix([0.0 for i in range(4)])
+		self.weights1 	  = rand(4,4)#matrix([rand() for i in range(4)]) #pole, cart, pole velocity, cart velocity
+		print self.weights1
+		self.weights2	  = rand(4,4)
+		self.weights3	  = matrix([rand() for i in range(4)])
 
 
 		self.temp_state	  = matrix([0.0 for i in range(4)])
@@ -282,17 +282,17 @@ class ANNController(Controller):
 
 	def Neuron_layer_1(self):
 		self.Z1 = self.weights1 * transpose(self.temp_state)
-		self.Z1 = tanh(self.Z1)
+		self.Z1 = tanh(self.Z1 / 4)
 		#print self.Z1
 		
 	def Neuron_layer_2(self):
 		self.Z2 = self.weights2 * self.Z1
-		self.Z2 = tanh(self.Z2)
-		print self.Z2
+		self.Z2 = tanh(self.Z2 / 4)
+		#print self.Z2
 
 	def Neuron_layer_3(self):
 		self.Z3 = self.weights3 * self.Z2
-		self.Z3 = tanh(float(self.Z3))
+		self.Z3 = tanh(float(self.Z3) / 4)
 		#print self.Z3
 		
 		
@@ -308,21 +308,22 @@ class ANNController(Controller):
 		if state[0] > (self.reference_p_ang + self.rew_angle) or state[0] < (self.reference_p_ang - self.rew_angle) or state[1] > (self.reference_c_pos + self.rew_deviation) or state[1] < (self.reference_c_pos - self.rew_deviation):
 			#self.weights += self.mew * abs( self.temp_state) * transpose(self.weight_gains)
 			for i in range(4):
-				self.weights1[i,0] += self.mew * abs( self.temp_state[0,0]) * self.weight_gains[0,0]
-				self.weights1[i,1] += self.mew * abs( self.temp_state[0,1]) * self.weight_gains[0,1]
-				self.weights1[i,2] += self.mew * abs( self.temp_state[0,2]) * self.weight_gains[0,2]
-				self.weights1[i,3] += self.mew * abs( self.temp_state[0,3]) * self.weight_gains[0,3]
+				self.weights1[i,0] += self.mew * ( self.temp_state[0,0]) * self.Z1[0] * self.weight_gains[0,0]
+				self.weights1[i,1] += self.mew * ( self.temp_state[0,1]) * self.Z1[1] * self.weight_gains[0,1]
+				self.weights1[i,2] += self.mew * ( self.temp_state[0,2]) * self.Z1[2]* self.weight_gains[0,2]
+				self.weights1[i,3] += self.mew * ( self.temp_state[0,3]) * self.Z1[3] * self.weight_gains[0,3]
+
 			for i in range(4):
-				self.weights2[i,0] += self.mew * abs( self.Z1[0]) * self.weight_gains[0,0]
-				self.weights2[i,1] += self.mew * abs( self.Z1[1]) * self.weight_gains[0,1]
-				self.weights2[i,2] += self.mew * abs( self.Z1[2]) * self.weight_gains[0,2]
-				self.weights2[i,3] += self.mew * abs( self.Z1[3]) * self.weight_gains[0,3]
+				self.weights2[i,0] += self.mew * ( self.Z1[0]) * self.Z2[0] * self.weight_gains[0,0]
+				self.weights2[i,1] += self.mew * ( self.Z1[1]) * self.Z2[1] * self.weight_gains[0,1]
+				self.weights2[i,2] += self.mew * ( self.Z1[2]) * self.Z2[2] * self.weight_gains[0,2]
+				self.weights2[i,3] += self.mew * ( self.Z1[3]) * self.Z2[3] * self.weight_gains[0,3]
 			
 
-			self.weights3[0,0] += self.mew * abs( self.Z2[0]) * self.weight_gains[0,0]
-			self.weights3[0,1] += self.mew * abs( self.Z2[1]) * self.weight_gains[0,1]
-			self.weights3[0,2] += self.mew * abs( self.Z2[2]) * self.weight_gains[0,2]
-			self.weights3[0,3] += self.mew * abs( self.Z2[3]) * self.weight_gains[0,3]	        
+			self.weights3[0,0] += self.mew * ( self.Z2[0]) * self.Z3 * self.weight_gains[0,0]
+			self.weights3[0,1] += self.mew * ( self.Z2[1]) * self.Z3 * self.weight_gains[0,1]
+			self.weights3[0,2] += self.mew * ( self.Z2[2]) * self.Z3 * self.weight_gains[0,2]
+			self.weights3[0,3] += self.mew * ( self.Z2[3]) * self.Z3 * self.weight_gains[0,3]	        
 
 	def out_of_bounds(self, state): #called from simulation to determine if the simulation should reset
 		if state[0] > (self.reference_p_ang + self.res_angle) or state[0] < (self.reference_p_ang - self.res_angle) or state[1] > (self.reference_c_pos + self.res_deviation) or state[1] < (self.reference_c_pos - self.res_deviation):
@@ -353,7 +354,7 @@ class ANNController_balance(ANNController):
 
 		#reference values
 		self.reference_p_ang = 0
-		self.reference_c_pos = 0.0
+		self.reference_c_pos = -1.0
 		self.reference_p_vel = 0
 		self.reference_c_vel = 0
 		self.reference_output= 0
@@ -450,7 +451,7 @@ class ANNController_to_angle(ANNController):
 		
 if __name__ == '__main__':
 	# Instantiate simulation
-	sim = CartPoleSimulation(figsize=(9,2.25), xlim=(-3,3), ylim=(-0.25,1.25))
+	sim = CartPoleSimulation(figsize=(9*1.2,2.25*1.2), xlim=(-3,3), ylim=(-0.25,1.25))
 	
 	# Set the controller
 	sim.controller = ANNController_to_angle()
